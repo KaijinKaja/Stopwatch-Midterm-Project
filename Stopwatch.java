@@ -3,73 +3,112 @@ import java.awt.*;
 
 public class Stopwatch extends JFrame {
 
-    // Time variables
-    private int milliseconds = 0;
-    private int seconds = 0;
-    private int minutes = 0;
+    // =========================
+    // TIME TRACKING VARIABLES
+    // =========================
 
-    // GUI components
+    private long startTime;          // Time when stopwatch starts/resumes
+    private long elapsedTime = 0;    // Accumulated paused time
+    private boolean running = false; // Running state
+
+    // =========================
+    // GUI COMPONENTS
+    // =========================
+
     private JLabel timeLabel;
     private JButton startBtn, stopBtn, resetBtn, lapBtn;
 
-    // Lap logger components
+    // =========================
+    // LAP LOGGER COMPONENTS
+    // =========================
+
     private DefaultListModel<String> lapModel;
     private JList<String> lapList;
 
-    // Swing timer for updating time
+    // Timer updates display only
     private Timer timer;
 
-    // Tracks whether the stopwatch is running
-    private boolean running = false;
+    private int lapCounter = 1;
 
-    // Constructor that sets up the GUI
+    // =========================
+    // COLOR THEME (LIGHT PINK)
+    // =========================
+
+    private final Color BACKGROUND   = new Color(255, 228, 235); // main light pink
+    private final Color PANEL_PINK   = new Color(255, 235, 240);
+    private final Color LIGHT_PINK   = new Color(255, 182, 193);
+    private final Color HOT_PINK     = new Color(255, 105, 180);
+    private final Color NEON_PINK    = new Color(255, 20, 147);
+    private final Color DARK_PINK    = new Color(199, 21, 133);
+
+    // =========================
+    // CONSTRUCTOR
+    // =========================
     public Stopwatch() {
 
+        // JFrame setup
         setTitle("Stopwatch");
         setSize(800, 400);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
         setLayout(new BorderLayout());
 
-        // Digital time display
+        // IMPORTANT: set content pane color
+        getContentPane().setBackground(BACKGROUND);
+
+        // =========================
+        // TIME DISPLAY
+        // =========================
+
         timeLabel = new JLabel("00:00:00", SwingConstants.CENTER);
         timeLabel.setFont(new Font("Arial", Font.BOLD, 60));
-        timeLabel.setForeground(new Color(0, 150, 0));
-        timeLabel.setBorder(BorderFactory.createLineBorder(Color.BLACK, 2));
+        timeLabel.setForeground(NEON_PINK);
+        timeLabel.setOpaque(true);
+        timeLabel.setBackground(PANEL_PINK);
+        timeLabel.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(HOT_PINK, 2),
+                BorderFactory.createEmptyBorder(10, 10, 10, 10)
+        ));
         timeLabel.setPreferredSize(new Dimension(400, 120));
 
-        // Buttons
+        // =========================
+        // BUTTONS
+        // =========================
+
         startBtn = new JButton("Start");
-        stopBtn = new JButton("Stop");
+        stopBtn  = new JButton("Stop");
         resetBtn = new JButton("Reset");
-        lapBtn = new JButton("Lap");
+        lapBtn   = new JButton("Lap");
 
-        Color buttonBlue = new Color(0, 102, 204);
-        JButton[] buttons = {startBtn, stopBtn, resetBtn, lapBtn};
+        styleButton(startBtn);
+        styleButton(stopBtn);
+        styleButton(resetBtn);
+        styleButton(lapBtn);
 
-        for (JButton btn : buttons) {
-            btn.setBackground(buttonBlue);
-            btn.setForeground(Color.WHITE);
-            btn.setFocusPainted(false);
-            btn.setFont(new Font("Arial", Font.BOLD, 14));
-            btn.setPreferredSize(new Dimension(90, 35));
-            btn.setOpaque(true);
-            btn.setBorderPainted(false);
-        }
+        stopBtn.setEnabled(false);
+        lapBtn.setEnabled(false);
 
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 15, 10));
+        buttonPanel.setBackground(BACKGROUND);
         buttonPanel.add(startBtn);
         buttonPanel.add(stopBtn);
         buttonPanel.add(resetBtn);
         buttonPanel.add(lapBtn);
 
         JPanel centerPanel = new JPanel(new BorderLayout());
+        centerPanel.setBackground(BACKGROUND);
         centerPanel.add(timeLabel, BorderLayout.CENTER);
         centerPanel.add(buttonPanel, BorderLayout.SOUTH);
 
-        // Lap logger
+        // =========================
+        // LAP LOGGER
+        // =========================
+
         lapModel = new DefaultListModel<>();
         lapList = new JList<>(lapModel);
+        lapList.setBackground(PANEL_PINK);
+        lapList.setSelectionBackground(HOT_PINK);
+        lapList.setSelectionForeground(Color.WHITE);
 
         lapList.setCellRenderer(new DefaultListCellRenderer() {
             @Override
@@ -80,7 +119,7 @@ public class Stopwatch extends JFrame {
                 JLabel label = (JLabel) super.getListCellRendererComponent(
                         list, value, index, isSelected, cellHasFocus);
 
-                label.setForeground(new Color(0, 150, 0));
+                label.setForeground(NEON_PINK);
                 label.setFont(new Font("Arial", Font.BOLD, 14));
                 return label;
             }
@@ -88,71 +127,144 @@ public class Stopwatch extends JFrame {
 
         JScrollPane scrollPane = new JScrollPane(lapList);
         scrollPane.setPreferredSize(new Dimension(250, 300));
-        scrollPane.setBorder(BorderFactory.createTitledBorder("Lap"));
+        scrollPane.getViewport().setBackground(PANEL_PINK);
+        scrollPane.setBorder(BorderFactory.createTitledBorder(
+                BorderFactory.createLineBorder(HOT_PINK),
+                "Lap Records",
+                0,
+                0,
+                new Font("Arial", Font.BOLD, 12),
+                NEON_PINK
+        ));
 
         add(centerPanel, BorderLayout.CENTER);
         add(scrollPane, BorderLayout.EAST);
 
-        // Timer updates every 10 milliseconds
-        timer = new Timer(10, e -> {
-            milliseconds += 10;
+        // =========================
+        // TIMER
+        // =========================
 
-            if (milliseconds == 1000) {
-                milliseconds = 0;
-                seconds++;
-            }
+        timer = new Timer(10, e -> updateDisplay());
 
-            if (seconds == 60) {
-                seconds = 0;
-                minutes++;
-            }
+        // =========================
+        // BUTTON ACTIONS
+        // =========================
 
-            updateTimeLabel();
-        });
-
-        // Start button action
+        // START
         startBtn.addActionListener(e -> {
             if (!running) {
+                startTime = System.nanoTime();
                 timer.start();
                 running = true;
+
+                startBtn.setBackground(NEON_PINK);
+                startBtn.setForeground(Color.WHITE);
+
+                stopBtn.setEnabled(true);
+                lapBtn.setEnabled(true);
+                startBtn.setEnabled(false);
             }
         });
 
-        // Stop button action
+        // STOP
         stopBtn.addActionListener(e -> {
-            timer.stop();
-            running = false;
+            if (running) {
+                elapsedTime += System.nanoTime() - startTime;
+                timer.stop();
+                running = false;
+
+                stopBtn.setBackground(DARK_PINK);
+                stopBtn.setForeground(Color.WHITE);
+
+                startBtn.setEnabled(true);
+                stopBtn.setEnabled(false);
+            }
         });
 
-        // Reset button action
+        // RESET
         resetBtn.addActionListener(e -> {
+
             timer.stop();
             running = false;
-            milliseconds = seconds = minutes = 0;
+
+            elapsedTime = 0;
+            lapCounter = 1;
             lapModel.clear();
-            updateTimeLabel();
+
+            updateDisplay();
+
+            styleButton(startBtn);
+            styleButton(stopBtn);
+
+            startBtn.setEnabled(true);
+            stopBtn.setEnabled(false);
+            lapBtn.setEnabled(false);
         });
 
-        // Lap button action
+        // LAP
         lapBtn.addActionListener(e -> {
             if (running) {
-                lapModel.addElement("Time: " + formatTime());
+                lapModel.addElement("Lap " + lapCounter++ + " - " + formatTime());
+                lapList.ensureIndexIsVisible(lapModel.size() - 1);
             }
         });
     }
 
-    // Updates the stopwatch display
-    private void updateTimeLabel() {
-        timeLabel.setText(formatTime());
+    // =========================
+    // BUTTON STYLE METHOD
+    // =========================
+
+    private void styleButton(JButton btn) {
+        btn.setBackground(LIGHT_PINK);
+        btn.setForeground(NEON_PINK);
+        btn.setFocusPainted(false);
+        btn.setFont(new Font("Arial", Font.BOLD, 14));
+        btn.setPreferredSize(new Dimension(90, 35));
+        btn.setOpaque(true);
+        btn.setBorder(BorderFactory.createLineBorder(HOT_PINK, 2));
     }
 
-    // Formats time as MM:SS:MS
+    // =========================
+    // DISPLAY UPDATE
+    // =========================
+
+    private void updateDisplay() {
+
+        long totalElapsed;
+
+        if (running) {
+            totalElapsed = elapsedTime + (System.nanoTime() - startTime);
+        } else {
+            totalElapsed = elapsedTime;
+        }
+
+        timeLabel.setText(formatTime(totalElapsed));
+    }
+
+    // =========================
+    // TIME FORMATTING
+    // =========================
+
     private String formatTime() {
-        return String.format("%02d:%02d:%02d",
-                minutes, seconds, milliseconds / 10);
+        return formatTime(elapsedTime + (System.nanoTime() - startTime));
     }
 
-    // Main method
+    private String formatTime(long nanoTime) {
+
+        long totalMilliseconds = nanoTime / 1_000_000;
+
+        long minutes = totalMilliseconds / 60000;
+        long seconds = (totalMilliseconds / 1000) % 60;
+        long centiseconds = (totalMilliseconds / 10) % 100;
+
+        return String.format("%02d:%02d:%02d",
+                minutes, seconds, centiseconds);
+    }
+
+    // =========================
+    // MAIN METHOD
+    // =========================
+
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> {
             new Stopwatch().setVisible(true);
